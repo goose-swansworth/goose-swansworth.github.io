@@ -11,6 +11,16 @@ const device = {
 	pixelRatio: window.devicePixelRatio 
 };
 
+let mouse = new THREE.Vector2();
+let mouseWordCoords = new THREE.Vector2(0, 0);
+
+function onMouseMove(event) {
+	mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
+    mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
+	mouseWordCoords = app.getMouseWordCoords();
+	//console.log(mouseWordCoords);	
+}
+
 class DoubleFrameBuffer {
 	constructor(length, vertexSrc, fragmentSrc) {
 		this.size = length;
@@ -46,6 +56,7 @@ class DoubleFrameBuffer {
 			uniforms: {
 				positions: {value: this.texture},
 				dt: {value: 0},
+				mouse: {value: mouseWordCoords}
 			},
 			vertexShader: vertexSrc,
 			fragmentShader: fragmentSrc
@@ -59,8 +70,8 @@ class DoubleFrameBuffer {
 		for (let i = 0; i < this.size; i++) {
 			for (let j = 0; j < this.size; j++) {
 				let index = (i + j * this.size) * 4;
-				let r = Math.random()
-				let theta = 2 * Math.PI * Math.random()
+				let r = 4 * Math.random()
+				let theta = 2 * Math.PI * Math.random();
 				this.data[index] = r * Math.cos(theta);
 				this.data[index + 1] = r * Math.sin(theta);
 				this.data[index + 2] = 0;
@@ -86,7 +97,7 @@ class App {
       		100
 		);
 		
-		this.numParts = 1500;
+		this.numParts = 10000;
 		this.size = Math.floor(Math.sqrt(this.numParts));
 
 
@@ -99,8 +110,20 @@ class App {
 		this.clock = new THREE.Clock();
 		this.controls = new OrbitControls(this.camera, this.renderer.domElement);
 		this.controls.update()
+
+		this.raycaster = new THREE.Raycaster();
 		
 		
+	}
+
+	getMouseWordCoords() {
+		this.camera.updateProjectionMatrix();
+		this.raycaster.setFromCamera(mouse, this.camera);
+		let intersections = new Array();
+		this.mousePlane.raycast(this.raycaster, intersections);
+		if (intersections.length > 0) {
+			return new THREE.Vector2(intersections[0].point.x, intersections[0].point.y);
+		} 
 	}
 
 	setGeometry() {
@@ -120,7 +143,8 @@ class App {
 		geometry.setAttribute("uv", new THREE.BufferAttribute(uv, 2));
 		this.texture = new THREE.ShaderMaterial({
 			uniforms: {
-				positions: {value: positions}
+				positions: {value: positions},
+				lastPositions: {value: positions}
 			},
 			side: THREE.DoubleSide,
 			fragmentShader: fragment,
@@ -128,14 +152,19 @@ class App {
 		});
 		this.points = new THREE.Points(geometry, this.texture);
 		this.scene.add(this.points);
+
+		// Plane to raycast to
+		this.mousePlane = new THREE.Mesh(new THREE.PlaneGeometry(10, 10), new THREE.MeshBasicMaterial());
 	}
 
 	render() {
 		requestAnimationFrame( () => this.render() );
+		this.frameBuffer.material.uniforms.mouse.value = mouseWordCoords;
 		this.frameBuffer.material.uniforms.dt.value = this.clock.getDelta();
 		// Set render target to buffer
 		this.renderer.setRenderTarget(this.frameBuffer.buffer);
 		// Set positions to be rendered as the last output of last pass
+		this.texture.uniforms.lastPositions.value = this.frameBuffer.buffer.texture1;
 		this.texture.uniforms.positions.value = this.frameBuffer.buffer.texture;
 		// Render to buffer's output texture
 		this.renderer.render(this.frameBuffer.scene, this.frameBuffer.camera);
@@ -155,6 +184,7 @@ class App {
 
 const app = new App();
 document.body.appendChild( app.renderer.domElement );
+document.addEventListener('mousemove', onMouseMove, false);
 
-app.camera.position.z = 2;
+app.camera.position.z = 8;
 app.render();
