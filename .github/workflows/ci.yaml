@@ -27,4 +27,4 @@ jobs:
         with:
           node-version: 18
       - run: npm install
-      - run: node_modules/bin/vite build
+      - run: node_modules/.bin/vite build
